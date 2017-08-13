@@ -17,6 +17,19 @@ filaint_t item[N];
 filaint_t *fila0, *fila1, *aux, *final ;
 int i;
 
+// imprime na tela um elemento da fila (chamada pela função queue_print)
+void print_elem (void *ptr)
+{
+   filaint_t *elem = ptr ;
+
+   if (!elem)
+      return ;
+
+   elem->prev ? printf ("%d", elem->prev->id) : printf ("*") ;
+   printf ("<%d>", elem->id) ;
+   elem->next ? printf ("%d", elem->next->id) : printf ("*") ;
+}
+
 int main (int argc, char **argv, char **envp)
 {
 	// inicializa os N elementos
@@ -26,7 +39,17 @@ int main (int argc, char **argv, char **envp)
 	   item[i].prev = NULL;
 	   item[i].next = NULL;
 	}
-	queue_append ((queue_t **) &fila0, (queue_t*) &item[0]);
-	printf("primeiro %d\n", fila0->id);
+	fila0 = NULL ;
+	// for (i=0; i<N; i++)
+	// {
+	   queue_append ((queue_t **) &fila0, (queue_t*) &item[0]) ;
+	   queue_append ((queue_t **) &fila0, (queue_t*) &item[1]) ;
+	   queue_append ((queue_t **) &fila0, (queue_t*) &item[2]) ;
+	   queue_append ((queue_t **) &fila0, (queue_t*) &item[3]) ;
+	   printf("%p\n", item[0].next); 
+	   printf("%p\n", item[1].next); 
+	   printf("%p\n", item[2].next); 
+	   printf("%p\n", item[3].next); 
+	// }
 	return 0;
 }
