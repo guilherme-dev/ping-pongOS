@@ -50,6 +50,8 @@ int main (int argc, char **argv, char **envp)
 	   printf("%p\n", item[1].next); 
 	   printf("%p\n", item[2].next); 
 	   printf("%p\n", item[3].next); 
+	   queue_remove ((queue_t**) &fila0, (queue_t*) &item[2]) ;
+
 	// }
 	return 0;
 }
