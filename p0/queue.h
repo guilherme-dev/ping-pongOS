@@ -1,104 +1,62 @@
 // PingPongOS - PingPong Operating System
-// P0: Biblioteca de filas
-// Guilherme Gomes dos Santos GRR20124499
-#include <stdio.h>
-#include <stdlib.h>
-#include "queue.h"
+// Prof. Carlos A. Maziero, DINF UFPR
+// Versão 1.0 -- Março de 2015
 
-int queue_size (queue_t *queue)
-{
-	int cont = 0;
-	queue_t *aux;
-	// verifica se a fila existe
-	if (!queue)
-		return 0;
-	aux = queue;
-	do {
-		cont++;
-		aux = aux->next;
-	} while (aux != queue);
-	return cont;
-}
+// Definição e operações em uma fila genérica.
 
-void queue_append (queue_t **queue, queue_t *elem)
-{
-	queue_t *aux;
-	// parametros invalidos
-	if (!elem || !queue) {
-		printf("queue_append: parametros invalidos\n");
-		return;
-	}
-	// elem já está em outra fila
-	if (elem->next != NULL || elem->prev != NULL) {
-		printf("queue_append: elem pertencente a outra fila\n");
-		return;
-	}
-	// fila vazia
-	if (!(*queue)) {
-		(*queue) = elem;
-		elem->next = elem->prev = elem;
-	} else {
-		aux = *queue;
-		while (aux->next != *queue) {
-			aux = aux->next;
-		}
-		aux->next = (*queue)->prev = elem;
-		elem->next = *queue;
-		elem->prev = aux;
-	}
-}
+#ifndef __QUEUE__
+#define __QUEUE__
 
-queue_t *queue_remove (queue_t **queue, queue_t *elem)
-{
-	queue_t *aux, *first;
-	// parametros invalidos
-	if (!queue || !elem) {
-		printf("queue_remove: parametros invalidos\n");
-		return NULL;
-	}
-	// fila vazia
-	if (!(*queue)) {
-		printf("queue_remove: fila vazia\n");
-		return NULL;
-	}
-	aux = first = *queue;
-	//fila com 1 elem
-	if (aux->next == aux && aux->prev == aux && aux == elem) {
-		(*queue) = elem->next = elem->prev = NULL;
-		return elem;
-	//elem eh o primeiro da fila	
-	} else if (aux == elem) {
-		(*queue) = elem->next;
-	}
-	while (aux != elem) {
-		aux = aux->next;
-		//elem nao está na fila
-		if (aux == first) {
-			printf("queue_remove: elem nao encontrado na fila\n");
-			return NULL;
-		}
-	}
-	//remove elem
-	aux->prev->next = elem->next;
-	aux->next->prev = elem->prev;
-	elem->next = aux->next = NULL;
-	elem->prev = aux->prev = NULL;
-	return elem;
-}
+#ifndef NULL
+#define NULL ((void *) 0)
+#endif
 
-void queue_print (char *name, queue_t *queue, void print_elem (void*) )
+//------------------------------------------------------------------------------
+// estrutura de uma fila genérica, sem conteúdo definido.
+// Veja um exemplo de uso desta estrutura em testafila.c
+
+typedef struct queue_t
 {
-	queue_t *aux = queue;
-	if (!queue)
-		printf("%s: []\n", name);
-	else {
-		printf("%s: [", name);
-		print_elem(aux);
-		while (aux->next != queue) {
-			printf(" ");
-			print_elem(aux->next);
-			aux = aux->next;
-		}
-		printf("]\n");
-	}
-}
+   struct queue_t *prev ;  // aponta para o elemento anterior na fila
+   struct queue_t *next ;  // aponta para o elemento seguinte na fila
+} queue_t ;
+
+//------------------------------------------------------------------------------
+// Insere um elemento no final da fila.
+// Condicoes a verificar, gerando msgs de erro:
+// - a fila deve existir
+// - o elemento deve existir
+// - o elemento nao deve estar em outra fila
+
+void queue_append (queue_t **queue, queue_t *elem) ;
+
+//------------------------------------------------------------------------------
+// Remove o elemento indicado da fila, sem o destruir.
+// Condicoes a verificar, gerando msgs de erro:
+// - a fila deve existir
+// - a fila nao deve estar vazia
+// - o elemento deve existir
+// - o elemento deve pertencer a fila indicada
+// Retorno: apontador para o elemento removido, ou NULL se erro
+
+queue_t *queue_remove (queue_t **queue, queue_t *elem) ;
+
+//------------------------------------------------------------------------------
+// Conta o numero de elementos na fila
+// Retorno: numero de elementos na fila
+
+int queue_size (queue_t *queue) ;
+
+//------------------------------------------------------------------------------
+// Percorre a fila e imprime na tela seu conteúdo. A impressão de cada
+// elemento é feita por uma função externa, definida pelo programa que
+// usa a biblioteca.
+//
+// Essa função deve ter o seguinte protótipo:
+//
+// void print_elem (void *ptr) ; // ptr aponta para o elemento a imprimir
+
+void queue_print (char *name, queue_t *queue, void print_elem (void*) ) ;
+
+#endif
+
