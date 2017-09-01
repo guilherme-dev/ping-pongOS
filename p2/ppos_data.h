@@ -23,6 +23,12 @@ typedef struct task_t
    // ... (outros campos serão adicionados mais tarde)
 } task_t ;
 
+// variaveis para controle de contexto
+task_t Main_task;
+task_t *current_task;
+int task_counter;
+
+
 // estrutura que define um semáforo
 typedef struct
 {
