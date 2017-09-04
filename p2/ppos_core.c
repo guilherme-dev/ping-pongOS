@@ -73,10 +73,10 @@ int task_switch (task_t *task)
 	}
 	task_t *aux = current_task;
 	current_task = task;
-	swapcontext(&aux->context, &task->context);
 	#ifdef DEBUG
 		printf("task_switch: trocando contexto %d -> %d\n", aux->id, task->id);
 	#endif
+	swapcontext(&aux->context, &task->context);
 	return 0;
 }
 
