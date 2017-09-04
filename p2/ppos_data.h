@@ -24,9 +24,9 @@ typedef struct task_t
 } task_t ;
 
 // variaveis para controle de contexto
-task_t Main_task;
-task_t *current_task;
-int task_counter;
+task_t Main_task;		//tarefa main
+task_t *current_task;	//ponteiro para a tarefa atual
+int task_counter;		//contador para geracao de Id's de tarefas
 
 
 // estrutura que define um semáforo

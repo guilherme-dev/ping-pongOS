@@ -14,6 +14,9 @@ void ppos_init ()
 	Main_task.id = 0 ;
 	current_task = &Main_task ;
 	task_counter = 0;
+	#ifdef DEBUG
+		printf("ppos_init: inicializou estruturas\n");
+	#endif
 }
 
 // gerência de tarefas =========================================================
@@ -22,6 +25,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 {
 	if (!task)
 	{
+		printf("task_create: task_t *task nao definida\n");
 		return -1;
 	}
 
@@ -34,7 +38,6 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     	task->context.uc_stack.ss_size = STACKSIZE ;
     	task->context.uc_stack.ss_flags = 0 ;
     	task->context.uc_link = 0 ;
-		// printf("%p\n", task->context.uc_link);
 	}
 	else 
 	{
@@ -45,12 +48,18 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 	makecontext (&task->context, (void*)(*start_func), 1, arg) ;
 	task_counter++;
 	task->id = task_counter;
+	#ifdef DEBUG
+		printf("task_create: gerou contexto para task %d\n", task->id);
+	#endif
 	return task->id;
 }
 
 // Termina a tarefa corrente, indicando um valor de status encerramento
 void task_exit (int exitCode)
 {
+	#ifdef DEBUG
+		printf("task_exit: codigo %d para encerrar tarefa %d\n", exitCode, current_task->id);
+	#endif
 	task_switch(&Main_task);
 }
 
@@ -59,16 +68,23 @@ int task_switch (task_t *task)
 {
 	if (!task)
 	{
+		printf("task_switch: task_t *task nao definida\n");
 		return -1;
 	}
 	task_t *aux = current_task;
 	current_task = task;
 	swapcontext(&aux->context, &task->context);
+	#ifdef DEBUG
+		printf("task_switch: trocando contexto %d -> %d\n", aux->id, task->id);
+	#endif
 	return 0;
 }
 
 // retorna o identificador da tarefa corrente (main deve ser 0)
 int task_id ()
 {
+	#ifdef DEBUG
+		printf("task_id: tarefa atual: %d\n", current_task->id);
+	#endif
 	return current_task->id;
 }
