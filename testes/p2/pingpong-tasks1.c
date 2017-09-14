@@ -51,6 +51,7 @@ int main (int argc, char *argv[])
    task_create (&Ping, BodyPing, "    Ping") ;
    task_create (&Pong, BodyPong, "        Pong") ;
 
+   // printf("%d\n", task_id());
    task_switch (&Ping) ;
    task_switch (&Pong) ;
 
