@@ -27,6 +27,10 @@ typedef struct task_t
 task_t Main_task;		//tarefa main
 task_t *current_task;	//ponteiro para a tarefa atual
 int task_counter;		//contador para geracao de Id's de tarefas
+// variaveis para uso do dispatcher e scheduler
+int user_tasks;			//contador que guarda a quantidade de tarefas na fila de prontas
+task_t Dispatcher;		//tarefa para o dispatcher
+task_t *ready_queue;	//fila de tarefas ready
 
 
 // estrutura que define um semáforo

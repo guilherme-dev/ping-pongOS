@@ -25,12 +25,16 @@ void queue_append (queue_t **queue, queue_t *elem)
 	queue_t *aux;
 	// parametros invalidos
 	if (!elem || !queue) {
-		printf("queue_append: parametros invalidos\n");
+		#ifdef DEBUG
+			printf("queue_append: parametros invalidos\n");
+		#endif
 		return;
 	}
 	// elem já está em outra fila
 	if (elem->next != NULL || elem->prev != NULL) {
-		printf("queue_append: elem pertencente a outra fila\n");
+		#ifdef DEBUG
+			printf("queue_append: elem pertencente a outra fila\n");
+		#endif
 		return;
 	}
 	// fila vazia
@@ -53,12 +57,16 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
 	queue_t *aux, *first;
 	// parametros invalidos
 	if (!queue || !elem) {
-		printf("queue_remove: parametros invalidos\n");
+		#ifdef DEBUG
+			printf("queue_remove: parametros invalidos\n");
+		#endif
 		return NULL;
 	}
 	// fila vazia
 	if (!(*queue)) {
-		printf("queue_remove: fila vazia\n");
+		#ifdef DEBUG
+			printf("queue_remove: fila vazia\n");
+		#endif
 		return NULL;
 	}
 	aux = first = *queue;
@@ -74,7 +82,9 @@ queue_t *queue_remove (queue_t **queue, queue_t *elem)
 		aux = aux->next;
 		//elem nao está na fila
 		if (aux == first) {
-			printf("queue_remove: elem nao encontrado na fila\n");
+			#ifdef DEBUG
+				printf("queue_remove: elem nao encontrado na fila\n");
+			#endif
 			return NULL;
 		}
 	}
