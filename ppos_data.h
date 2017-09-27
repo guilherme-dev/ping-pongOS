@@ -7,11 +7,14 @@
 #ifndef __PPOS_DATA__
 #define __PPOS_DATA__
 
+#include <signal.h>
+#include <sys/time.h>
 #include <ucontext.h>		// biblioteca POSIX de trocas de contexto
 #include "queue.h"		// biblioteca de filas genéricas
 
 
 #define STACKSIZE 32768		/* tamanho de pilha das threads */
+#define QUANTUMSIZE 20
 
 // Estrutura que define um Task Control Block (TCB)
 typedef struct task_t
@@ -22,6 +25,8 @@ typedef struct task_t
    void *stack ;			// aponta para a pilha da tarefa
    int static_prio;
    int dinamic_prio;
+   int quantum;
+   int user_task;
    // ... (outros campos serão adicionados mais tarde)
 } task_t ;
 
@@ -29,11 +34,17 @@ typedef struct task_t
 task_t Main_task;		//tarefa main
 task_t *current_task;	//ponteiro para a tarefa atual
 int task_counter;		//contador para geracao de Id's de tarefas
+
 // variaveis para uso do dispatcher e scheduler
 int user_tasks;			//contador que guarda a quantidade de tarefas na fila de prontas
 task_t Dispatcher;		//tarefa para o dispatcher
 task_t *ready_queue;	//fila de tarefas ready
 
+// estrutura que define um tratador de sinal (deve ser global ou static)
+struct sigaction action;
+
+// estrutura de inicialização to timer
+struct itimerval timer;
 
 // estrutura que define um semáforo
 typedef struct
@@ -60,4 +71,3 @@ typedef struct
 } mqueue_t ;
 
 #endif
-

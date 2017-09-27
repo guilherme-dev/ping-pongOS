@@ -5,26 +5,52 @@
 #include <stdlib.h>
 #include "ppos.h"
 
-//Prototipos
+//Prototipos de funcoes nao globais
 void dispatcher_body ();
 task_t * scheduler ();
+void sigalrm_handler (int signum);
 
 // Inicializa o sistema operacional; deve ser chamada no inicio do main()
 void ppos_init ()
 {
-	// desativa o buffer da saida padrao (stdout), usado pela função printf 
-	setvbuf (stdout, 0, _IONBF, 0) ;
+	// desativa o buffer da saida padrao (stdout), usado pela função printf
+	setvbuf (stdout, 0, _IONBF, 0);
+
 	//inicializa task Main
-	Main_task.prev = Main_task.next = NULL ;
-	Main_task.id = 0 ;
-	current_task = &Main_task ;
+	Main_task.prev = Main_task.next = NULL;
+	Main_task.id = 0;
+	current_task = &Main_task;
 	task_counter = 0;
 
 	//inicializa dispatcher
 	task_create(&Dispatcher, dispatcher_body, " ");
-	#ifdef DEBUG
-		printf("ppos_init: inicializou estruturas\n");
-	#endif
+        #ifdef DEBUG
+        	printf("ppos_init: inicializou estruturas\n");
+        #endif
+
+    // registra ação para o sinal de timer SIGALRM
+    action.sa_handler = sigalrm_handler;
+    sigemptyset (&action.sa_mask);
+    action.sa_flags = 0;
+    if (sigaction (SIGALRM, &action, 0) < 0)
+    {
+        printf("Erro em sigaction: SIGALRM\n");
+        exit (-1);
+    }
+
+    // ajusta valores do temporizador
+    timer.it_value.tv_usec = 10 ;      // primeiro disparo, em micro-segundos
+    timer.it_value.tv_sec  = 0 ;      // primeiro disparo, em segundos
+    timer.it_interval.tv_usec = 1000 ;   // disparos subsequentes, em micro-segundos
+    timer.it_interval.tv_sec  = 0 ;   // disparos subsequentes, em segundos
+
+    // arma o temporizador ITIMER_REAL (vide man setitimer)
+    if (setitimer (ITIMER_REAL, &timer, 0) < 0)
+    {
+      printf ("Erro em setitimer: ") ;
+      exit (1) ;
+    }
+
 }
 
 // gerência de tarefas =========================================================
@@ -37,34 +63,53 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 		return -1;
 	}
 
-	getcontext (&task->context) ;
+	getcontext (&task->context);
 
-	task->stack = malloc (STACKSIZE) ;
-	if (task->stack) 
+	task->stack = malloc (STACKSIZE);
+	if (task->stack)
 	{
-		task->context.uc_stack.ss_sp = task->stack ;
-    	task->context.uc_stack.ss_size = STACKSIZE ;
-    	task->context.uc_stack.ss_flags = 0 ;
-    	task->context.uc_link = 0 ;
+		task->context.uc_stack.ss_sp = task->stack;
+    	task->context.uc_stack.ss_size = STACKSIZE;
+    	task->context.uc_stack.ss_flags = 0;
+    	task->context.uc_link = 0;
 	}
-	else 
+	else
 	{
-		printf ("Erro na criação da pilha: \n") ;
-		exit (1) ;
+		printf ("Erro na criação da pilha: \n");
+		exit (1);
 	}
 
-	makecontext (&task->context, (void*)(*start_func), 1, arg) ;
-	//controle para geracao de Id's	
-	task_counter++;	
+	makecontext (&task->context, (void*)(*start_func), 1, arg);
+
+
+	//controle para geracao de Id's
+	task_counter++;
+
+
+
 	task->id = task_counter;
+
+    //atributos da tarefa
+    if (!task->static_prio) {
+        task->static_prio = task->dinamic_prio = 10;
+    }
+
+    if (task->id > 1) {
+        task->quantum = QUANTUMSIZE;
+        task->user_task = 1;
+    } else {
+        task->user_task = 0; //se dispatcher
+    }
+
 	#ifdef DEBUG
 		printf("task_create: criou tarefa %d\n", task->id);
 	#endif
 	if (task->id > 1)
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);
-	#ifdef DEBUG
-		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
-	#endif
+    	#ifdef DEBUG
+    		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
+    	#endif
+
 	return task->id;
 }
 
@@ -75,10 +120,10 @@ void task_exit (int exitCode)
 		printf("task_exit: codigo %d para encerrar tarefa %d\n", exitCode, current_task->id);
 	#endif
 	//Se a tarefa atual eh o dispathcer, volta pra Main
-	if (current_task->id <= 1) 
+	if (current_task->id <= 1)
 	{
 		task_switch(&Main_task);
-	} 
+	}
 	else
 	{
 		user_tasks--;
@@ -87,7 +132,7 @@ void task_exit (int exitCode)
 }
 
 // alterna a execução para a tarefa indicada
-int task_switch (task_t *task) 
+int task_switch (task_t *task)
 {
 	if (!task)
 	{
@@ -116,7 +161,6 @@ int task_id ()
 // prontas ("ready queue")
 void task_yield ()
 {
-
 	//Insere tarefa atual na fila de prontas
 	#ifdef DEBUG
 		printf("task_yield: current_task> %d\n", current_task->id);
@@ -158,16 +202,20 @@ void dispatcher_body ()
 	task_t *next;
 	//define tamanho da fila de prontas
 	user_tasks = queue_size((queue_t *) ready_queue);
+    #ifdef DEBUG
+        printf("Tamanho da fila de prontas: %d\n", user_tasks);
+    #endif
 	while (user_tasks > 0)
 	{
 		next = scheduler();
 		if (next)
 		{
 			queue_remove((queue_t **) &ready_queue, (queue_t *) next);
+            next->quantum = QUANTUMSIZE;
 			task_switch (next); // transfere controle para a tarefa "next"
 		}
 	}
-	   task_exit(0) ; // encerra a tarefa dispatcher
+	task_exit(0) ; // encerra a tarefa dispatcher
 }
 
 //Scheduler por prioridades
@@ -179,11 +227,11 @@ task_t * scheduler ()
 	{
 		aux = aux->next;
 		//Se prioridade dinamico menor, troca e diminui o alfa
-		if (aux->dinamic_prio <= high_prio->dinamic_prio) {
+		if (aux->dinamic_prio < high_prio->dinamic_prio) {
 			high_prio->dinamic_prio--;
 			high_prio = aux;
 		//se nao eh menor, diminui o alfa
-		} else if (aux->dinamic_prio > -21) { //-21 para caso existam duas tarefas -20
+        } else if ( aux->dinamic_prio == high_prio->dinamic_prio && aux->dinamic_prio > -21) { //-21 para caso existam duas tarefas == > -20
 			aux->dinamic_prio--;
 		}
 		#ifdef DEBUG
@@ -194,7 +242,24 @@ task_t * scheduler ()
 	#ifdef DEBUG
 		printf("scheduler: prioridade mais alta:%d\n", high_prio->dinamic_prio);
 	#endif
-	//reseta prioridade dinamica 
-	high_prio->dinamic_prio = high_prio->static_prio; 
+	//reseta prioridade dinamica
+	high_prio->dinamic_prio = high_prio->static_prio;
 	return high_prio;
+}
+
+//trador do sinal do timer
+void sigalrm_handler (int signum)
+{
+    // #ifdef DEBUG
+    //     printf("Signal!\n");
+    // #endif
+
+    if (current_task->user_task) {
+        if (current_task->quantum > 0) {
+            current_task->quantum--;
+        }
+        else {
+            task_yield();
+        }
+    }
 }
