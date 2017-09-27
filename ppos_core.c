@@ -15,6 +15,7 @@ void ppos_init ()
 {
 	// desativa o buffer da saida padrao (stdout), usado pela função printf
 	setvbuf (stdout, 0, _IONBF, 0);
+    current_timer = 0;
 
 	//inicializa task Main
 	Main_task.prev = Main_task.next = NULL;
@@ -84,14 +85,11 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 
 	//controle para geracao de Id's
 	task_counter++;
-
-
-
 	task->id = task_counter;
 
     //atributos da tarefa
     if (!task->static_prio) {
-        task->static_prio = task->dinamic_prio = 10;
+        task->static_prio = task->dinamic_prio = 0;
     }
 
     if (task->id > 1) {
@@ -100,6 +98,9 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     } else {
         task->user_task = 0; //se dispatcher
     }
+
+    task->exec_time = task->cpu_time_sum = task->cpu_time = systime();
+    task->activations = 0;
 
 	#ifdef DEBUG
 		printf("task_create: criou tarefa %d\n", task->id);
@@ -110,16 +111,26 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
     	#endif
 
+
 	return task->id;
 }
 
 // Termina a tarefa corrente, indicando um valor de status encerramento
 void task_exit (int exitCode)
 {
+    unsigned int time_now = systime();
 	#ifdef DEBUG
 		printf("task_exit: codigo %d para encerrar tarefa %d\n", exitCode, current_task->id);
 	#endif
-	//Se a tarefa atual eh o dispathcer, volta pra Main
+
+    current_task->cpu_time_sum = current_task->cpu_time_sum + (time_now - current_task->cpu_time);
+    current_task->exec_time = time_now - current_task->exec_time;
+    printf("Task %4d exit: running time %4d ms, cpu time  %4d ms, %d activations\n",
+            current_task->id,
+            current_task->exec_time,
+            current_task->cpu_time_sum,
+            current_task->activations );
+    //Se a tarefa atual eh o dispathcer, volta pra Main
 	if (current_task->id <= 1)
 	{
 		task_switch(&Main_task);
@@ -134,11 +145,17 @@ void task_exit (int exitCode)
 // alterna a execução para a tarefa indicada
 int task_switch (task_t *task)
 {
+    unsigned int time_now = systime();
 	if (!task)
 	{
 		printf("task_switch: task_t *task nao definida\n");
 		return -1;
 	}
+    //Contabilizacao
+    current_task->cpu_time_sum += time_now - current_task->cpu_time;
+    task->cpu_time = time_now;
+    task->activations++;
+
 	task_t *aux = current_task;
 	current_task = task;
 	#ifdef DEBUG
@@ -165,6 +182,7 @@ void task_yield ()
 	#ifdef DEBUG
 		printf("task_yield: current_task> %d\n", current_task->id);
 	#endif
+
 	if (current_task->id > 1)		//Nao insere a Main na fila de prontas
 		queue_append((queue_t **) &ready_queue, (queue_t*) current_task);
 	task_switch(&Dispatcher);
@@ -182,8 +200,9 @@ void task_setprio (task_t *task, int prio)
 	}
 	if (!task)
 		current_task->static_prio = current_task->dinamic_prio = prio;
-	else
+	else {
 		task->static_prio = task->dinamic_prio = prio;
+    }
 }
 
 // retorna a prioridade estática de uma tarefa (ou a tarefa atual)
@@ -223,20 +242,21 @@ task_t * scheduler ()
 {
 	task_t *high_prio, *aux, *first;		//variaveis de controle
 	aux = first = high_prio = ready_queue;
+
 	do
 	{
 		aux = aux->next;
 		//Se prioridade dinamico menor, troca e diminui o alfa
 		if (aux->dinamic_prio < high_prio->dinamic_prio) {
-			high_prio->dinamic_prio--;
 			high_prio = aux;
-		//se nao eh menor, diminui o alfa
-        } else if ( aux->dinamic_prio == high_prio->dinamic_prio && aux->dinamic_prio > -21) { //-21 para caso existam duas tarefas == > -20
-			aux->dinamic_prio--;
-		}
+        } else if (aux->dinamic_prio == high_prio->dinamic_prio) {
+            if (aux->static_prio < high_prio->static_prio )
+                high_prio = aux;
+        }
 		#ifdef DEBUG
 			printf("scheduler: task_id %d com prioridade %d\n", aux->id, aux->dinamic_prio);
 		#endif
+        aux->dinamic_prio--;
 	} while (aux->next != first);
 
 	#ifdef DEBUG
@@ -253,7 +273,7 @@ void sigalrm_handler (int signum)
     // #ifdef DEBUG
     //     printf("Signal!\n");
     // #endif
-
+    current_timer++;
     if (current_task->user_task) {
         if (current_task->quantum > 0) {
             current_task->quantum--;
@@ -262,4 +282,9 @@ void sigalrm_handler (int signum)
             task_yield();
         }
     }
+}
+
+unsigned int systime ()
+{
+    return current_timer;
 }

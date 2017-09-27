@@ -23,11 +23,15 @@ typedef struct task_t
    int id ;				// identificador da tarefa
    ucontext_t context ;			// contexto armazenado da tarefa
    void *stack ;			// aponta para a pilha da tarefa
-   int static_prio;
-   int dinamic_prio;
-   int quantum;
-   int user_task;
-   // ... (outros campos serão adicionados mais tarde)
+   int static_prio;         //prioridade estatica
+   int dinamic_prio;        //prioridade dinamica
+   int quantum;             //quantum
+   int user_task;           // 1 - tarefa de usuario, 0 - tarefa de sistema
+   unsigned int exec_time;
+   unsigned int cpu_time_sum;
+   unsigned int cpu_time;
+   unsigned int activations;
+
 } task_t ;
 
 // variaveis para controle de contexto
@@ -39,6 +43,7 @@ int task_counter;		//contador para geracao de Id's de tarefas
 int user_tasks;			//contador que guarda a quantidade de tarefas na fila de prontas
 task_t Dispatcher;		//tarefa para o dispatcher
 task_t *ready_queue;	//fila de tarefas ready
+unsigned int current_timer; //relogio
 
 // estrutura que define um tratador de sinal (deve ser global ou static)
 struct sigaction action;
