@@ -20,14 +20,23 @@ void ppos_init ()
 	//inicializa task Main
 	Main_task.prev = Main_task.next = NULL;
 	Main_task.id = 0;
+    Main_task.quantum = QUANTUMSIZE;
+    Main_task.user_task = 1;
+    if (!Main_task.static_prio) {
+        Main_task.static_prio = Main_task.dinamic_prio = 0;
+    }
+    Main_task.exec_time = Main_task.cpu_time_sum = Main_task.cpu_time = systime();
+    Main_task.activations = 0;
+
+
 	current_task = &Main_task;
 	task_counter = 0;
 
 	//inicializa dispatcher
 	task_create(&Dispatcher, dispatcher_body, " ");
-        #ifdef DEBUG
-        	printf("ppos_init: inicializou estruturas\n");
-        #endif
+    #ifdef DEBUG
+    	printf("ppos_init: inicializou estruturas\n");
+    #endif
 
     // registra ação para o sinal de timer SIGALRM
     action.sa_handler = sigalrm_handler;
@@ -51,7 +60,13 @@ void ppos_init ()
       printf ("Erro em setitimer: ") ;
       exit (1) ;
     }
+    #ifdef DEBUG
+        printf("ppos_init: criou temporizador\n");
+    #endif
 
+    //Utilizando task_yield para colocar a Main na fila de prontas e passar o controle ao Dispatcher
+    //Nesse momento a fila conterá apenas a Main, que voltará para execução logo após ppo_init()
+    task_yield();
 }
 
 // gerência de tarefas =========================================================
@@ -105,7 +120,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 	#ifdef DEBUG
 		printf("task_create: criou tarefa %d\n", task->id);
 	#endif
-	if (task->id > 1)
+	if (task->user_task)
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);
     	#ifdef DEBUG
     		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
@@ -131,7 +146,8 @@ void task_exit (int exitCode)
             current_task->cpu_time_sum,
             current_task->activations );
     //Se a tarefa atual eh o dispathcer, volta pra Main
-	if (current_task->id <= 1)
+    //A Main precisa ter um exit(0)
+	if (current_task->id == 1)
 	{
 		task_switch(&Main_task);
 	}
@@ -183,7 +199,7 @@ void task_yield ()
 		printf("task_yield: current_task> %d\n", current_task->id);
 	#endif
 
-	if (current_task->id > 1)		//Nao insere a Main na fila de prontas
+	if (current_task->id != 1)		//Nao insere Dispatcher
 		queue_append((queue_t **) &ready_queue, (queue_t*) current_task);
 	task_switch(&Dispatcher);
 }
@@ -220,11 +236,10 @@ void dispatcher_body ()
 {
 	task_t *next;
 	//define tamanho da fila de prontas
-	user_tasks = queue_size((queue_t *) ready_queue);
     #ifdef DEBUG
         printf("Tamanho da fila de prontas: %d\n", user_tasks);
     #endif
-	while (user_tasks > 0)
+	while (queue_size((queue_t *) ready_queue) > 0)
 	{
 		next = scheduler();
 		if (next)
@@ -253,7 +268,7 @@ task_t * scheduler ()
             if (aux->static_prio < high_prio->static_prio )
                 high_prio = aux;
         }
-		#ifdef DEBUG
+		#ifdef DEBUG2
 			printf("scheduler: task_id %d com prioridade %d\n", aux->id, aux->dinamic_prio);
 		#endif
         aux->dinamic_prio--;
