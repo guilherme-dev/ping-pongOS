@@ -219,13 +219,7 @@ void task_yield ()
 	#endif
 
 	if (current_task->id != 1) {		//Nao insere Dispatcher
-		#ifdef DEBUG
-			printf("task_yield: entrou no if\n");
-		#endif
 		queue_append((queue_t **) &ready_queue, (queue_t*) current_task);
-		#ifdef DEBUG
-			printf("task_yield: fez append\n");
-		#endif
 	}
 	task_switch(&Dispatcher);
 }
@@ -334,6 +328,7 @@ int task_join (task_t *task)
 		queue_append((queue_t **) &suspended_queue, (queue_t*) current_task);
 		task_switch(&Dispatcher);
 	}
+	current_task->dependency = -1;
 	return task->exit_code;
 }
 
