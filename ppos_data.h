@@ -27,6 +27,9 @@ typedef struct task_t
    int dinamic_prio;        //prioridade dinamica
    int quantum;             //quantum
    int user_task;           // 1 - tarefa de usuario, 0 - tarefa de sistema
+   int status;              // 0 - finalizada, 1 - ativa (pronta, execução ou suspensa)
+   int exit_code;
+   int dependency;          // Id da tarefa da qual esta depende para sair do modo suspenso
    unsigned int exec_time;
    unsigned int cpu_time_sum;
    unsigned int cpu_time;
@@ -43,6 +46,7 @@ int task_counter;		//contador para geracao de Id's de tarefas
 int user_tasks;			//contador que guarda a quantidade de tarefas na fila de prontas
 task_t Dispatcher;		//tarefa para o dispatcher
 task_t *ready_queue;	//fila de tarefas ready
+task_t *suspended_queue; //fila de tarefas suspensas
 unsigned int current_timer; //relogio
 
 // estrutura que define um tratador de sinal (deve ser global ou static)

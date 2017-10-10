@@ -2,13 +2,13 @@
 // Prof. Carlos A. Maziero, DINF UFPR
 // Versão 1.1 -- Julho de 2016
 
-// Teste da tarefa main escalonável
+// Teste do operador task_join
 
 #include <stdio.h>
 #include <stdlib.h>
 #include "ppos.h"
 
-#define WORKLOAD 40000
+#define WORKLOAD 20000
 
 task_t Pang, Peng, Ping, Pong, Pung ;
 
@@ -27,17 +27,27 @@ int hardwork (int n)
 // corpo das threads
 void Body (void * arg)
 {
-   printf ("%s: inicio em %4d ms\n", (char *) arg, systime()) ;
-   hardwork (WORKLOAD) ;
-   printf ("%s: fim    em %4d ms\n", (char *) arg, systime()) ;
+   int i, max ;
+
+   max = task_id() * 2 ;
+
+   printf ("%s: inicio\n", (char *) arg) ;
+   for (i=0; i<max; i++)
+   {
+      printf ("%s: %d\n", (char *) arg, i) ;
+      hardwork (WORKLOAD) ;
+   }
+   printf ("%s: fim\n", (char *) arg) ;
    task_exit (0) ;
-} 
+}
 
 int main (int argc, char *argv[])
 {
+   int i ;
+
    ppos_init () ;
 
-   printf ("main: inicio em %4d ms\n", systime()) ;
+   printf ("main: inicio\n");
 
    task_create (&Pang, Body, "    Pang") ;
    task_create (&Peng, Body, "        Peng") ;
@@ -45,10 +55,31 @@ int main (int argc, char *argv[])
    task_create (&Pong, Body, "                Pong") ;
    task_create (&Pung, Body, "                    Pung") ;
 
-   hardwork (0.75*WORKLOAD) ;
+   for (i=0; i<2; i++)
+   {
+      printf ("main: %d\n", i) ;
+      hardwork (WORKLOAD) ;
+   }
 
-   printf ("main: fim    em %4d ms\n", systime()) ;
-   task_exit (0);
+   printf ("main: esperando Pang...\n") ;
+   task_join (&Pang) ;
+
+   printf ("main: Pang acabou, esperando Peng...\n") ;
+   task_join (&Peng) ;
+
+   printf ("main: Peng acabou, esperando Ping...\n") ;
+   task_join (&Ping) ;
+
+   printf ("main: Ping acabou, esperando Pong...\n") ;
+   task_join (&Pong) ;
+
+   printf ("main: Pong acabou, esperando Pung...\n") ;
+   task_join (&Pung) ;
+
+   printf ("main: Pung acabou\n") ;
+   printf ("main: fim\n");
+
+   task_exit (0) ;
 
    exit (0) ;
 }

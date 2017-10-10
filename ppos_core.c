@@ -5,10 +5,12 @@
 #include <stdlib.h>
 #include "ppos.h"
 
-//Prototipos de funcoes nao globais
+// Prototipos de funcoes gerais ================================================
 void dispatcher_body ();
 task_t * scheduler ();
 void sigalrm_handler (int signum);
+
+// funções gerais ==============================================================
 
 // Inicializa o sistema operacional; deve ser chamada no inicio do main()
 void ppos_init ()
@@ -70,6 +72,7 @@ void ppos_init ()
 }
 
 // gerência de tarefas =========================================================
+
 // Cria uma nova tarefa. Retorna um ID> 0 ou erro.
 int task_create (task_t *task, void (*start_func)(void *), void *arg)
 {
@@ -79,6 +82,10 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 		return -1;
 	}
 
+	task_counter++;
+	task->id = task_counter;
+	task->status = 1;
+	printf("task_create: task_counter: %d\n", task_counter);
 	getcontext (&task->context);
 
 	task->stack = malloc (STACKSIZE);
@@ -99,15 +106,14 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 
 
 	//controle para geracao de Id's
-	task_counter++;
-	task->id = task_counter;
+	
 
     //atributos da tarefa
     if (!task->static_prio) {
         task->static_prio = task->dinamic_prio = 0;
     }
 
-    if (task->id > 1) {
+    if (task->id != 1) {
         task->quantum = QUANTUMSIZE;
         task->user_task = 1;
     } else {
@@ -120,11 +126,13 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 	#ifdef DEBUG
 		printf("task_create: criou tarefa %d\n", task->id);
 	#endif
-	if (task->user_task)
+	if (task->user_task) {
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);
     	#ifdef DEBUG
     		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
     	#endif
+	}
+		
 
 
 	return task->id;
@@ -133,10 +141,13 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 // Termina a tarefa corrente, indicando um valor de status encerramento
 void task_exit (int exitCode)
 {
-    unsigned int time_now = systime();
+	unsigned int time_now = systime();
+	task_t *aux, *first;
 	#ifdef DEBUG
 		printf("task_exit: codigo %d para encerrar tarefa %d\n", exitCode, current_task->id);
 	#endif
+	current_task->exit_code = exitCode;
+	current_task->status = 0;
 
     current_task->cpu_time_sum = current_task->cpu_time_sum + (time_now - current_task->cpu_time);
     current_task->exec_time = time_now - current_task->exec_time;
@@ -144,15 +155,21 @@ void task_exit (int exitCode)
             current_task->id,
             current_task->exec_time,
             current_task->cpu_time_sum,
-            current_task->activations );
+			current_task->activations );
+	//Se existem tarefas aguardando a tarefa atual, estas tarefas devem 
+	//voltar para a fila de prontas
+	aux = first = suspended_queue;
+	do {
+		if (aux->dependency == current_task->id) {
+			queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
+		}
+	} while (aux != first);
+
     //Se a tarefa atual eh o dispathcer, volta pra Main
     //A Main precisa ter um exit(0)
-	if (current_task->id == 1)
-	{
+	if (current_task->id == 1) {
 		task_switch(&Main_task);
-	}
-	else
-	{
+	} else {
 		user_tasks--;
 		task_switch(&Dispatcher);
 	}
@@ -190,6 +207,8 @@ int task_id ()
 	return current_task->id;
 }
 
+// operações de escalonamento ==================================================
+
 // libera o processador para a próxima tarefa, retornando à fila de tarefas
 // prontas ("ready queue")
 void task_yield ()
@@ -199,8 +218,15 @@ void task_yield ()
 		printf("task_yield: current_task> %d\n", current_task->id);
 	#endif
 
-	if (current_task->id != 1)		//Nao insere Dispatcher
+	if (current_task->id != 1) {		//Nao insere Dispatcher
+		#ifdef DEBUG
+			printf("task_yield: entrou no if\n");
+		#endif
 		queue_append((queue_t **) &ready_queue, (queue_t*) current_task);
+		#ifdef DEBUG
+			printf("task_yield: fez append\n");
+		#endif
+	}
 	task_switch(&Dispatcher);
 }
 
@@ -230,14 +256,13 @@ int task_getprio (task_t *task)
 		return task->static_prio;
 }
 
-
-//Body da tarefa dispatcher
+// Body da tarefa dispatcher
 void dispatcher_body ()
 {
 	task_t *next;
 	//define tamanho da fila de prontas
     #ifdef DEBUG
-        printf("Tamanho da fila de prontas: %d\n", user_tasks);
+        printf("Tamanho da fila de prontas: %d\n", queue_size((queue_t *) ready_queue));
     #endif
 	while (queue_size((queue_t *) ready_queue) > 0)
 	{
@@ -252,7 +277,10 @@ void dispatcher_body ()
 	task_exit(0) ; // encerra a tarefa dispatcher
 }
 
-//Scheduler por prioridades
+
+// operações de sincronização ==================================================
+
+// Scheduler por prioridades
 task_t * scheduler ()
 {
 	task_t *high_prio, *aux, *first;		//variaveis de controle
@@ -282,12 +310,9 @@ task_t * scheduler ()
 	return high_prio;
 }
 
-//trador do sinal do timer
+// trador do sinal do timer
 void sigalrm_handler (int signum)
 {
-    // #ifdef DEBUG
-    //     printf("Signal!\n");
-    // #endif
     current_timer++;
     if (current_task->user_task) {
         if (current_task->quantum > 0) {
@@ -299,6 +324,20 @@ void sigalrm_handler (int signum)
     }
 }
 
+// a tarefa corrente aguarda o encerramento de outra task
+int task_join (task_t *task) 
+{
+	if (task->status == 0 || current_task->id == 1) {
+		return -1;
+	} else {
+		current_task->dependency = task->id;
+		queue_append((queue_t **) &suspended_queue, (queue_t*) current_task);
+		task_switch(&Dispatcher);
+	}
+	return task->exit_code;
+}
+
+// retorna o relógio atual (em milisegundos)
 unsigned int systime ()
 {
     return current_timer;
