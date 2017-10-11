@@ -162,6 +162,9 @@ void task_exit (int exitCode)
 	do {
 		if (aux->dependency == current_task->id) {
 			queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
+			#ifdef DEBUG
+			printf("task_exit: tarefa %d entrou na fila de prontas\n", aux->id);
+			#endif
 		}
 		aux = aux->next;
 	} while (aux != first);
@@ -169,8 +172,10 @@ void task_exit (int exitCode)
     //Se a tarefa atual eh o dispathcer, volta pra Main
     //A Main precisa ter um exit(0)
 	if (current_task->id == 1) {
-		if (Main_task.status == 0) 
+		if (Main_task.status == 0) {
+			printf("task_exit: dispatcher finalizando apos Main ter encerrado\n");
 			exit(0);
+		}
 		task_switch(&Main_task);
 	} else {
 		user_tasks--;
@@ -285,19 +290,19 @@ task_t * scheduler ()
 
 	do
 	{
-		aux = aux->next;
 		//Se prioridade dinamico menor, troca e diminui o alfa
 		if (aux->dinamic_prio < high_prio->dinamic_prio) {
 			high_prio = aux;
         } else if (aux->dinamic_prio == high_prio->dinamic_prio) {
-            if (aux->static_prio < high_prio->static_prio )
-                high_prio = aux;
+			if (aux->static_prio < high_prio->static_prio )
+			high_prio = aux;
         }
 		#ifdef DEBUG2
-			printf("scheduler: task_id %d com prioridade %d\n", aux->id, aux->dinamic_prio);
+		printf("scheduler: task_id %d com prioridade %d\n", aux->id, aux->dinamic_prio);
 		#endif
         aux->dinamic_prio--;
-	} while (aux->next != first);
+		aux = aux->next;
+	} while (aux != first);
 
 	#ifdef DEBUG
 		printf("scheduler: prioridade mais alta:%d\n", high_prio->dinamic_prio);
