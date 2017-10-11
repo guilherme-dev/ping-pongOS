@@ -163,11 +163,14 @@ void task_exit (int exitCode)
 		if (aux->dependency == current_task->id) {
 			queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
 		}
+		aux = aux->next;
 	} while (aux != first);
 
     //Se a tarefa atual eh o dispathcer, volta pra Main
     //A Main precisa ter um exit(0)
 	if (current_task->id == 1) {
+		if (Main_task.status == 0) 
+			exit(0);
 		task_switch(&Main_task);
 	} else {
 		user_tasks--;
