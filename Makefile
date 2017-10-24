@@ -1,5 +1,5 @@
-CFLAGS = -Wall -g  # gerar "warnings" detalhados e infos de depuração
-objs = ppos_core.o queue.o
+CFLAGS = -Wall -DDEBUG  # gerar "warnings" detalhados e infos de depuração
+objs = ppos_core.o queue.o main.o
 
 # regra default
 all: main

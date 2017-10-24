@@ -51,7 +51,7 @@ void ppos_init ()
     }
 
     // ajusta valores do temporizador
-    timer.it_value.tv_usec = 10 ;      // primeiro disparo, em micro-segundos
+    timer.it_value.tv_usec = 1000 ;      // primeiro disparo, em micro-segundos
     timer.it_value.tv_sec  = 0 ;      // primeiro disparo, em segundos
     timer.it_interval.tv_usec = 1000 ;   // disparos subsequentes, em micro-segundos
     timer.it_interval.tv_sec  = 0 ;   // disparos subsequentes, em segundos
@@ -68,7 +68,7 @@ void ppos_init ()
 
     //Utilizando task_yield para colocar a Main na fila de prontas e passar o controle ao Dispatcher
     //Nesse momento a fila conterá apenas a Main, que voltará para execução logo após ppo_init()
-    task_yield();
+    // task_yield();
 }
 
 // gerência de tarefas =========================================================
@@ -81,13 +81,13 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 		printf("task_create: task_t *task nao definida\n");
 		return -1;
 	}
-
-	task_counter++;
-	task->id = task_counter;
-	task->status = 1;
-	printf("task_create: task_counter: %d\n", task_counter);
-	getcontext (&task->context);
-
+    #ifdef DEBUG
+        printf("Antes: %d\n", task_counter);
+    #endif
+    getcontext (&task->context);
+    #ifdef DEBUG
+        printf("Depois: %d\n", task_counter);
+    #endif
 	task->stack = malloc (STACKSIZE);
 	if (task->stack)
 	{
@@ -95,6 +95,9 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     	task->context.uc_stack.ss_size = STACKSIZE;
     	task->context.uc_stack.ss_flags = 0;
     	task->context.uc_link = 0;
+        task_counter++;
+        task->id = task_counter;
+        task->status = 1;
 	}
 	else
 	{
@@ -103,10 +106,6 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 	}
 
 	makecontext (&task->context, (void*)(*start_func), 1, arg);
-
-
-	//controle para geracao de Id's
-	
 
     //atributos da tarefa
     if (!task->static_prio) {
@@ -132,7 +131,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
     	#endif
 	}
-		
+
 
 
 	return task->id;
@@ -156,14 +155,14 @@ void task_exit (int exitCode)
             current_task->exec_time,
             current_task->cpu_time_sum,
 			current_task->activations );
-	//Se existem tarefas aguardando a tarefa atual, estas tarefas devem 
+	//Se existem tarefas aguardando a tarefa atual, estas tarefas devem
 	//voltar para a fila de prontas
 	aux = first = suspended_queue;
 	do {
 		if (aux->dependency == current_task->id) {
 			queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
 			#ifdef DEBUG
-			printf("task_exit: tarefa %d entrou na fila de prontas\n", aux->id);
+				printf("task_exit: tarefa %d entrou na fila de prontas\n", aux->id);
 			#endif
 		}
 		aux = aux->next;
@@ -172,10 +171,10 @@ void task_exit (int exitCode)
     //Se a tarefa atual eh o dispathcer, volta pra Main
     //A Main precisa ter um exit(0)
 	if (current_task->id == 1) {
-		if (Main_task.status == 0) {
-			printf("task_exit: dispatcher finalizando apos Main ter encerrado\n");
-			exit(0);
-		}
+		// if (Main_task.status == 0) {
+		// 	//printf("task_exit: dispatcher finalizando apos Main ter encerrado\n");
+		// 	exit(0);
+		// }
 		task_switch(&Main_task);
 	} else {
 		user_tasks--;
@@ -298,7 +297,7 @@ task_t * scheduler ()
 			high_prio = aux;
         }
 		#ifdef DEBUG2
-		printf("scheduler: task_id %d com prioridade %d\n", aux->id, aux->dinamic_prio);
+			printf("scheduler: task_id %d com prioridade %d\n", aux->id, aux->dinamic_prio);
 		#endif
         aux->dinamic_prio--;
 		aux = aux->next;
@@ -327,7 +326,7 @@ void sigalrm_handler (int signum)
 }
 
 // a tarefa corrente aguarda o encerramento de outra task
-int task_join (task_t *task) 
+int task_join (task_t *task)
 {
 	if (task->status == 0 || current_task->id == 1) {
 		return -1;

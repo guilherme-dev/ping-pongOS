@@ -14,7 +14,7 @@
 
 
 #define STACKSIZE 32768		/* tamanho de pilha das threads */
-#define QUANTUMSIZE 20
+#define QUANTUMSIZE 30
 
 // Estrutura que define um Task Control Block (TCB)
 typedef struct task_t
