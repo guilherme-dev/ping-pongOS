@@ -257,11 +257,12 @@ int task_getprio (task_t *task)
 // Body da tarefa dispatcher
 void dispatcher_body ()
 {
-	task_t *next, *aux, *first;
+	task_t *next, *aux, *aux_next;
 	//define tamanho da fila de prontas
     #ifdef DEBUG
         printf("dispatcher: Tamanho da fila de prontas: %d\n", queue_size((queue_t *) ready_queue));
     #endif
+
 	while (queue_size((queue_t *) ready_queue) > 0 || queue_size((queue_t *) sleep_queue) > 0) {
 		next = scheduler();
 		if (next) {
@@ -269,22 +270,18 @@ void dispatcher_body ()
             next->quantum = QUANTUMSIZE;
 			task_switch (next); // transfere controle para a tarefa "next"
 		}
-        // #ifdef DEBUG
-        //     if(next == NULL)
-        //         printf("dispatcher: fila de prontas vazia\n");
-        // #endif
         //verifica fila de tarefas adormecidas
         if (queue_size((queue_t *) sleep_queue) > 0) {
-            aux = first = sleep_queue;
+            aux  =sleep_queue;
             do {
                 if (systime() >= aux->awake) {
+                    aux_next = aux->next;   //Como queue_remove retira os ponteiros de aux, eh preciso salva-los
                     queue_append((queue_t **) &ready_queue, queue_remove((queue_t **) &sleep_queue, (queue_t *) aux));
-        			// #ifdef DEBUG
-        			// 	printf("dispatcher: tarefa %d entrou novamente na fila de prontas\n", aux->id);
-        			// #endif
+                    aux = aux_next;
+                } else {
+                    aux = aux->next;
                 }
-                aux = aux->next;
-            } while (aux != first);
+            } while (aux != sleep_queue && sleep_queue != NULL);
         }
 	}
 	task_exit(0) ; // encerra a tarefa dispatcher
@@ -360,7 +357,7 @@ void task_sleep (int t)
 {
     if (t < 0)
         return;
-    current_task->awake = systime() + t;
+    current_task->awake = systime() + t ;
     queue_append((queue_t **) &sleep_queue, (queue_t *) current_task);
     #ifdef DEBUG
         printf("task_sleep: inseriu task %d na fila de adormecidas\n", current_task->id);
