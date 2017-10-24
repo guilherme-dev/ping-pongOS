@@ -68,7 +68,7 @@ void ppos_init ()
 
     //Utilizando task_yield para colocar a Main na fila de prontas e passar o controle ao Dispatcher
     //Nesse momento a fila conterá apenas a Main, que voltará para execução logo após ppo_init()
-    // task_yield();
+    task_yield();
 }
 
 // gerência de tarefas =========================================================
@@ -81,30 +81,12 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 		printf("task_create: task_t *task nao definida\n");
 		return -1;
 	}
-    getcontext (&task->context);
-	task->stack = malloc (STACKSIZE);
-	if (task->stack)
-	{
-		task->context.uc_stack.ss_sp = task->stack;
-    	task->context.uc_stack.ss_size = STACKSIZE;
-    	task->context.uc_stack.ss_flags = 0;
-    	task->context.uc_link = 0;
-        // task_counter++;
-
-        task->status = 1;
-	}
-	else
-	{
-		printf ("Erro na criação da pilha: \n");
-		exit (1);
-	}
-
-	makecontext (&task->context, (void*)(*start_func), 1, arg);
-
     //atributos da tarefa
     if (!task->static_prio) {
         task->static_prio = task->dinamic_prio = 0;
     }
+
+    task->status = 1;
 
     if (task != &Dispatcher) {
         task->id = queue_size((queue_t *) ready_queue) + 2;
@@ -115,11 +97,31 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
         task->user_task = 0; //se dispatcher
     }
 
+    getcontext (&task->context);
+	task->stack = malloc (STACKSIZE);
+	if (task->stack)
+	{
+		task->context.uc_stack.ss_sp = task->stack;
+    	task->context.uc_stack.ss_size = STACKSIZE;
+    	task->context.uc_stack.ss_flags = 0;
+    	task->context.uc_link = 0;
+	}
+	else
+	{
+		printf ("Erro na criação da pilha: \n");
+		exit (1);
+	}
+
+	makecontext (&task->context, (void*)(*start_func), 1, arg);
+
+
+
     task->exec_time = task->cpu_time_sum = task->cpu_time = systime();
     task->activations = 0;
 
 	#ifdef DEBUG
-		printf("task_create: criou tarefa %d\n", task->id);
+        printf("Tamanho da fila: %d em %d\n", queue_size((queue_t *) ready_queue), systime());
+		printf("task_create: criou tarefa %s\n", (char *)arg);
 	#endif
 	if (task->user_task) {
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);
@@ -143,6 +145,7 @@ void task_exit (int exitCode)
 	#endif
 	current_task->exit_code = exitCode;
 	current_task->status = 0;
+    free(current_task->context.uc_stack.ss_sp);
 
     current_task->cpu_time_sum = current_task->cpu_time_sum + (time_now - current_task->cpu_time);
     current_task->exec_time = time_now - current_task->exec_time;
@@ -163,7 +166,6 @@ void task_exit (int exitCode)
 		}
 		aux = aux->next;
 	} while (aux != first);
-
     //Se a tarefa atual eh o dispathcer, volta pra Main
     //A Main precisa ter um exit(0)
 	if (current_task->id == 1) {
@@ -230,8 +232,7 @@ void task_yield ()
 // define a prioridade estática de uma tarefa (ou a tarefa atual)
 void task_setprio (task_t *task, int prio)
 {
-	if (prio < -20 || prio > 20)
-	{
+	if (prio < -20 || prio > 20) {
 		#ifdef DEBUG
 			printf("task_setprio: valor de parametro prio invalido\n");
 		#endif
@@ -256,22 +257,35 @@ int task_getprio (task_t *task)
 // Body da tarefa dispatcher
 void dispatcher_body ()
 {
-	task_t *next;
+	task_t *next, *aux, *first;
 	//define tamanho da fila de prontas
     #ifdef DEBUG
-        printf("Tamanho da fila de prontas: %d\n", queue_size((queue_t *) ready_queue));
+        printf("dispatcher: Tamanho da fila de prontas: %d\n", queue_size((queue_t *) ready_queue));
     #endif
-	while (queue_size((queue_t *) ready_queue) > 0)
-	{
+	while (queue_size((queue_t *) ready_queue) > 0 || queue_size((queue_t *) sleep_queue) > 0) {
 		next = scheduler();
-		if (next)
-		{
+		if (next) {
 			queue_remove((queue_t **) &ready_queue, (queue_t *) next);
             next->quantum = QUANTUMSIZE;
 			task_switch (next); // transfere controle para a tarefa "next"
-            if (next->status == 0)
-                free(next->context.uc_stack.ss_sp);
 		}
+        // #ifdef DEBUG
+        //     if(next == NULL)
+        //         printf("dispatcher: fila de prontas vazia\n");
+        // #endif
+        //verifica fila de tarefas adormecidas
+        if (queue_size((queue_t *) sleep_queue) > 0) {
+            aux = first = sleep_queue;
+            do {
+                if (systime() >= aux->awake) {
+                    queue_append((queue_t **) &ready_queue, queue_remove((queue_t **) &sleep_queue, (queue_t *) aux));
+        			// #ifdef DEBUG
+        			// 	printf("dispatcher: tarefa %d entrou novamente na fila de prontas\n", aux->id);
+        			// #endif
+                }
+                aux = aux->next;
+            } while (aux != first);
+        }
 	}
 	task_exit(0) ; // encerra a tarefa dispatcher
 }
@@ -282,11 +296,13 @@ void dispatcher_body ()
 // Scheduler por prioridades
 task_t * scheduler ()
 {
-	task_t *high_prio, *aux, *first;		//variaveis de controle
-	aux = first = high_prio = ready_queue;
+    task_t *high_prio, *aux, *first;		//variaveis de controle
+    aux = first = high_prio = ready_queue;
+    if (queue_size((queue_t *) ready_queue) < 1)
+        return NULL;
 
-	do
-	{
+
+	do {
 		//Se prioridade dinamico menor, troca e diminui o alfa
 		if (aux->dinamic_prio < high_prio->dinamic_prio) {
 			high_prio = aux;
@@ -301,7 +317,7 @@ task_t * scheduler ()
 		aux = aux->next;
 	} while (aux != first);
 
-	#ifdef DEBUG
+	#ifdef DEBUG2
 		printf("scheduler: prioridade mais alta:%d\n", high_prio->dinamic_prio);
 	#endif
 	//reseta prioridade dinamica
@@ -335,6 +351,21 @@ int task_join (task_t *task)
 	}
 	current_task->dependency = -1;
 	return task->exit_code;
+}
+
+// operações de gestão do tempo ================================================
+
+// suspende a tarefa corrente por t milissegundos
+void task_sleep (int t)
+{
+    if (t < 0)
+        return;
+    current_task->awake = systime() + t;
+    queue_append((queue_t **) &sleep_queue, (queue_t *) current_task);
+    #ifdef DEBUG
+        printf("task_sleep: inseriu task %d na fila de adormecidas\n", current_task->id);
+    #endif
+    task_switch(&Dispatcher);
 }
 
 // retorna o relógio atual (em milisegundos)

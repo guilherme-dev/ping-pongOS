@@ -30,6 +30,7 @@ typedef struct task_t
    int status;              // 0 - finalizada, 1 - ativa (pronta, execução ou suspensa)
    int exit_code;
    int dependency;          // Id da tarefa da qual esta depende para sair do modo suspenso
+   int awake;                // tempo a ser acordada
    unsigned int exec_time;
    unsigned int cpu_time_sum;
    unsigned int cpu_time;
@@ -40,13 +41,14 @@ typedef struct task_t
 // variaveis para controle de contexto
 task_t Main_task;		//tarefa main
 task_t *current_task;	//ponteiro para a tarefa atual
-// int task_counter;		//contador para geracao de Id's de tarefas
+// int task_counter; 		//contador para geracao de Id's de tarefas
 
 // variaveis para uso do dispatcher e scheduler
 int user_tasks;			//contador que guarda a quantidade de tarefas na fila de prontas
 task_t Dispatcher;		//tarefa para o dispatcher
 task_t *ready_queue;	//fila de tarefas ready
 task_t *suspended_queue; //fila de tarefas suspensas
+task_t *sleep_queue;   //fila de tarefas adormecidas
 unsigned int current_timer; //relogio
 
 // estrutura que define um tratador de sinal (deve ser global ou static)
