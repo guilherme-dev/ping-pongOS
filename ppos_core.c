@@ -32,7 +32,7 @@ void ppos_init ()
 
 
 	current_task = &Main_task;
-	task_counter = 0;
+	// task_counter = 0;
 
 	//inicializa dispatcher
 	task_create(&Dispatcher, dispatcher_body, " ");
@@ -81,13 +81,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 		printf("task_create: task_t *task nao definida\n");
 		return -1;
 	}
-    #ifdef DEBUG
-        printf("Antes: %d\n", task_counter);
-    #endif
     getcontext (&task->context);
-    #ifdef DEBUG
-        printf("Depois: %d\n", task_counter);
-    #endif
 	task->stack = malloc (STACKSIZE);
 	if (task->stack)
 	{
@@ -95,8 +89,8 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     	task->context.uc_stack.ss_size = STACKSIZE;
     	task->context.uc_stack.ss_flags = 0;
     	task->context.uc_link = 0;
-        task_counter++;
-        task->id = task_counter;
+        // task_counter++;
+
         task->status = 1;
 	}
 	else
@@ -112,10 +106,12 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
         task->static_prio = task->dinamic_prio = 0;
     }
 
-    if (task->id != 1) {
+    if (task != &Dispatcher) {
+        task->id = queue_size((queue_t *) ready_queue) + 2;
         task->quantum = QUANTUMSIZE;
         task->user_task = 1;
     } else {
+        task->id = 1;
         task->user_task = 0; //se dispatcher
     }
 
@@ -273,6 +269,8 @@ void dispatcher_body ()
 			queue_remove((queue_t **) &ready_queue, (queue_t *) next);
             next->quantum = QUANTUMSIZE;
 			task_switch (next); // transfere controle para a tarefa "next"
+            if (next->status == 0)
+                free(next->context.uc_stack.ss_sp);
 		}
 	}
 	task_exit(0) ; // encerra a tarefa dispatcher
