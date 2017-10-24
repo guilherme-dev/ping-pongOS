@@ -1,84 +1,85 @@
 // PingPongOS - PingPong Operating System
 // Prof. Carlos A. Maziero, DINF UFPR
-// Versão 1.1 -- Julho de 2016
+// Versão 1.2 -- Julho de 2017
 
-// Teste do operador task_join
+// Teste do task_sleep()
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "ppos.h"
 
-#define WORKLOAD 20000
-
 task_t Pang, Peng, Ping, Pong, Pung ;
-
-// simula um processamento pesado
-int hardwork (int n)
-{
-   int i, j, soma ;
-
-   soma = 0 ;
-   for (i=0; i<n; i++)
-      for (j=0; j<n; j++)
-         soma += j ;
-   return (soma) ;
-}
 
 // corpo das threads
 void Body (void * arg)
 {
-   int i, max ;
+   int i, timeSleep, timeBefore, timeAfter ;
+   char *status ;
 
-   max = task_id() * 2 ;
-
-   printf ("%s: inicio\n", (char *) arg) ;
-   for (i=0; i<max; i++)
+   printf ("%5d ms: %s: inicio\n", systime(), (char *) arg) ;
+   for (i=0; i<20; i++)
    {
-      printf ("%s: %d\n", (char *) arg, i) ;
-      hardwork (WORKLOAD) ;
+      // sorteia tempo entre 0 e 2000 ms (2s), em saltos de 100 ms
+      timeSleep = 100 * (random() % 11) ;
+
+      // informa o quanto vai dormir
+      printf ("%5d ms: %s vai dormir %d ms\n",
+              systime(), (char *) arg, timeSleep) ;
+
+      // registra tempo antes e depois de dormir
+      timeBefore = systime () ;
+      task_sleep (timeSleep) ;
+      timeAfter  = systime () ;
+
+      // verifica se dormiu o intervalo especificado
+      status = (timeAfter - timeBefore) == timeSleep ? "ok" : "ERROR" ;
+
+      // informa o quanto efetivamente dormiu
+      printf ("%5d ms: %s dormiu     %d ms (%s)\n", systime(),
+              (char *) arg, timeAfter - timeBefore, status) ;
    }
-   printf ("%s: fim\n", (char *) arg) ;
+   printf ("%5d ms: %s: fim\n", systime(), (char *) arg) ;
    task_exit (0) ;
 }
 
 int main (int argc, char *argv[])
 {
-   int i ;
-
+   // inicializacao do SO
    ppos_init () ;
 
-   printf ("main: inicio\n");
+   printf ("%5d ms: main: inicio\n", systime()) ;
 
+   // lanca as tarefas
    task_create (&Pang, Body, "    Pang") ;
    task_create (&Peng, Body, "        Peng") ;
    task_create (&Ping, Body, "            Ping") ;
    task_create (&Pong, Body, "                Pong") ;
    task_create (&Pung, Body, "                    Pung") ;
 
-   for (i=0; i<2; i++)
-   {
-      printf ("main: %d\n", i) ;
-      hardwork (WORKLOAD) ;
-   }
-
-   printf ("main: esperando Pang...\n") ;
+   // aguarda tarefas concluirem
+   printf ("%5d ms: main: espera Pang...\n", systime()) ;
    task_join (&Pang) ;
+   printf ("%5d ms: main: Pang acabou\n", systime()) ;
 
-   printf ("main: Pang acabou, esperando Peng...\n") ;
+   printf ("%5d ms: main: espera Peng...\n", systime()) ;
    task_join (&Peng) ;
+   printf ("%5d ms: main: Peng acabou\n", systime()) ;
 
-   printf ("main: Peng acabou, esperando Ping...\n") ;
+   printf ("%5d ms: main: espera Ping...\n", systime()) ;
    task_join (&Ping) ;
+   printf ("%5d ms: main: Ping acabou\n", systime()) ;
 
-   printf ("main: Ping acabou, esperando Pong...\n") ;
+   printf ("%5d ms: main: espera Pong...\n", systime()) ;
    task_join (&Pong) ;
+   printf ("%5d ms: main: Pong acabou\n", systime()) ;
 
-   printf ("main: Pong acabou, esperando Pung...\n") ;
+   printf ("%5d ms: main: espera Pung...\n", systime()) ;
    task_join (&Pung) ;
+   printf ("%5d ms: main: Pung acabou\n", systime()) ;
 
-   printf ("main: Pung acabou\n") ;
-   printf ("main: fim\n");
-
+   // main encerra
+   printf ("%5d ms: main: fim\n", systime()) ;
    task_exit (0) ;
 
    exit (0) ;
