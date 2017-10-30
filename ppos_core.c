@@ -145,7 +145,6 @@ void task_exit (int exitCode)
 	#endif
 	current_task->exit_code = exitCode;
 	current_task->status = 0;
-    free(current_task->context.uc_stack.ss_sp);
 
     current_task->cpu_time_sum = current_task->cpu_time_sum + (time_now - current_task->cpu_time);
     current_task->exec_time = time_now - current_task->exec_time;
@@ -157,22 +156,21 @@ void task_exit (int exitCode)
 	//Se existem tarefas aguardando a tarefa atual, estas tarefas devem
 	//voltar para a fila de prontas
 	aux = first = suspended_queue;
-	do {
-		if (aux->dependency == current_task->id) {
-			queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
-			#ifdef DEBUG
-				printf("task_exit: tarefa %d entrou na fila de prontas\n", aux->id);
-			#endif
-		}
-		aux = aux->next;
-	} while (aux != first);
+    if (suspended_queue) {
+        do {
+    		if (aux->dependency == current_task->id) {
+    			queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
+    			#ifdef DEBUG
+    				printf("task_exit: tarefa %d entrou na fila de prontas\n", aux->id);
+    			#endif
+    		}
+    		aux = aux->next;
+    	} while (aux != first);
+    }
+
     //Se a tarefa atual eh o dispathcer, volta pra Main
     //A Main precisa ter um exit(0)
 	if (current_task->id == 1) {
-		// if (Main_task.status == 0) {
-		// 	//printf("task_exit: dispatcher finalizando apos Main ter encerrado\n");
-		// 	exit(0);
-		// }
 		task_switch(&Main_task);
 	} else {
 		user_tasks--;
@@ -269,13 +267,16 @@ void dispatcher_body ()
 			queue_remove((queue_t **) &ready_queue, (queue_t *) next);
             next->quantum = QUANTUMSIZE;
 			task_switch (next); // transfere controle para a tarefa "next"
+            if (next->status == 0)
+                free(next->context.uc_stack.ss_sp);
+
 		}
         //verifica fila de tarefas adormecidas
-        if (queue_size((queue_t *) sleep_queue) > 0) {
-            aux  =sleep_queue;
+        if (sleep_queue) {
+            aux = sleep_queue;
             do {
                 if (systime() >= aux->awake) {
-                    aux_next = aux->next;   //Como queue_remove retira os ponteiros de aux, eh preciso salva-los
+                    aux_next = aux->next;   //Como queue_remove retira os ponteiros de aux, preciso salva-los
                     queue_append((queue_t **) &ready_queue, queue_remove((queue_t **) &sleep_queue, (queue_t *) aux));
                     aux = aux_next;
                 } else {
