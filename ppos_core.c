@@ -33,7 +33,7 @@ void ppos_init ()
 
 	current_task = &Main_task;
 	// task_counter = 0;
-
+    user_tasks = 1;
 	//inicializa dispatcher
 	task_create(&Dispatcher, dispatcher_body, " ");
     #ifdef DEBUG
@@ -124,6 +124,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 		printf("task_create: criou tarefa %s\n", (char *)arg);
 	#endif
 	if (task->user_task) {
+        user_tasks++;
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);
     	#ifdef DEBUG
     		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
@@ -261,7 +262,7 @@ void dispatcher_body ()
         printf("dispatcher: Tamanho da fila de prontas: %d\n", queue_size((queue_t *) ready_queue));
     #endif
 
-	while (queue_size((queue_t *) ready_queue) > 0 || queue_size((queue_t *) sleep_queue) > 0) {
+	while (queue_size((queue_t *) ready_queue) > 0 || queue_size((queue_t *) sleep_queue) > 0 || user_tasks > 0) {
 		next = scheduler();
 		if (next) {
 			queue_remove((queue_t **) &ready_queue, (queue_t *) next);
@@ -277,6 +278,9 @@ void dispatcher_body ()
             do {
                 if (systime() >= aux->awake) {
                     aux_next = aux->next;   //Como queue_remove retira os ponteiros de aux, preciso salva-los
+                    #ifdef DEBUG
+                        printf("dispatcher: acordou tarefa %d\n", aux->id);
+                    #endif
                     queue_append((queue_t **) &ready_queue, queue_remove((queue_t **) &sleep_queue, (queue_t *) aux));
                     aux = aux_next;
                 } else {
@@ -370,4 +374,92 @@ void task_sleep (int t)
 unsigned int systime ()
 {
     return current_timer;
+}
+
+
+// operações de IPC ============================================================
+
+// semáforos
+
+// cria um semáforo com valor inicial "value"
+int sem_create (semaphore_t *s, int value)
+{
+    current_task->user_task = 0;
+	if (!s) {
+        printf("sem_up: semaforo nao existe\n");
+        return -1;
+    }
+	s->queue = NULL;
+	s->counter = value;
+
+    current_task->user_task = 1;
+    return 0;
+
+}
+
+// requisita o semáforo
+int sem_down (semaphore_t *s)
+{
+    if (!s) {
+        printf("sem_down: semaforo nao existe\n");
+        return -1;
+    }
+    current_task->user_task = 0;
+
+    s->counter = s->counter - 1;
+    if (s->counter < 0) {
+        #ifdef DEBUG
+            printf("sem_down: inseriu %d na fila do semaforo\n", current_task->id);
+        #endif
+        queue_append((queue_t **) &s->queue, (queue_t *) current_task);
+        task_switch(&Dispatcher);
+    }
+    current_task->user_task = 1;
+
+	return 0;
+}
+
+// libera o semáforo
+int sem_up (semaphore_t *s)
+{
+    task_t *aux;
+    if (!s) {
+        printf("sem_up: semaforo nao existe\n");
+        return -1;
+    }
+    current_task->user_task = 0;
+
+    s->counter = s->counter + 1;
+    if (s->queue != NULL && s->counter  <= 0) {
+        aux = s->queue;
+        queue_append((queue_t **) &ready_queue, queue_remove((queue_t **) &s->queue, (queue_t * ) aux));
+        #ifdef DEBUG
+            printf("sem_up: inseriu %d na fila de prontas\n", current_task->id);
+        #endif
+    }
+    current_task->user_task = 1;
+	return 0;
+}
+
+// destroi o semáforo, liberando as tarefas bloqueadas
+int sem_destroy (semaphore_t *s)
+{
+    task_t * aux, *aux_next;
+    if (!s) {
+        printf("sem_destroy: semaforo nao existe\n");
+        return -1;
+    }
+    current_task->user_task = 0;
+    if (s->queue != NULL) {
+        aux = s->queue;
+        do {
+            aux_next = aux->next;
+            queue_append((queue_t **) &ready_queue, queue_remove((queue_t **) &s->queue, (queue_t *) aux));
+            aux = aux_next;
+        } while (aux != s->queue && s->queue != NULL);
+    }
+    s = NULL;
+
+    current_task->user_task = 1;
+	return 0;
 }
