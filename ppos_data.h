@@ -60,7 +60,8 @@ struct itimerval timer;
 // estrutura que define um semáforo
 typedef struct
 {
-  // preencher quando necessário
+  int counter;
+  task_t *queue;
 } semaphore_t ;
 
 // estrutura que define um mutex
