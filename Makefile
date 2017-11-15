@@ -1,4 +1,4 @@
-CFLAGS = -Wall #  gerar "warnings" detalhados e infos de depuração
+CFLAGS = -Wall -lm #  gerar "warnings" detalhados e infos de depuração
 objs =  ppos_core.o ppos_ipc.o queue.o main.o
 
 # regra default

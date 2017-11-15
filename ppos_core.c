@@ -336,6 +336,9 @@ void sigalrm_handler (int signum)
             current_task->quantum--;
         }
         else {
+            #ifdef DEBUG
+                printf("YIELD: yield task %d\n", current_task->id);
+            #endif
             task_yield();
         }
     }
@@ -362,7 +365,7 @@ void task_sleep (int t)
 {
     if (t < 0)
         return;
-    current_task->awake = systime() + t ;
+    current_task->awake = systime() + t;
     queue_append((queue_t **) &sleep_queue, (queue_t *) current_task);
     #ifdef DEBUG
         printf("task_sleep: inseriu task %d na fila de adormecidas\n", current_task->id);

@@ -17,6 +17,7 @@ int sem_create (semaphore_t *s, int value)
         printf("sem_up: semaforo nao existe\n");
         return -1;
     }
+    s->active = 1;
 	s->queue = NULL;
 	s->counter = value;
 
@@ -28,12 +29,13 @@ int sem_create (semaphore_t *s, int value)
 // requisita o semáforo
 int sem_down (semaphore_t *s)
 {
-    if (!s) {
-        printf("sem_down: semaforo nao existe\n");
+    current_task->user_task = 0;
+    if (!s || s->active == 0) {
+        #ifdef DEBUG
+            printf("sem_down: semaforo nao existe\n");
+        #endif
         return -1;
     }
-    current_task->user_task = 0;
-
     s->counter = s->counter - 1;
     if (s->counter < 0) {
         #ifdef DEBUG
@@ -42,21 +44,22 @@ int sem_down (semaphore_t *s)
         queue_append((queue_t **) &s->queue, (queue_t *) current_task);
         task_switch(&Dispatcher);
     }
-    current_task->user_task = 1;
 
+    current_task->user_task = 1;
 	return 0;
 }
 
 // libera o semáforo
 int sem_up (semaphore_t *s)
 {
+    current_task->user_task = 0;
     task_t *aux;
-    if (!s) {
-        printf("sem_up: semaforo nao existe\n");
+    if (!s || s->active == 0) {
+        #ifdef DEBUG
+            printf("sem_up: semaforo nao existe\n");
+        #endif
         return -1;
     }
-    current_task->user_task = 0;
-
     s->counter = s->counter + 1;
     if (s->queue != NULL && s->counter  <= 0) {
         aux = s->queue;
@@ -72,12 +75,12 @@ int sem_up (semaphore_t *s)
 // destroi o semáforo, liberando as tarefas bloqueadas
 int sem_destroy (semaphore_t *s)
 {
+    current_task->user_task = 0;
     task_t * aux, *aux_next;
     if (!s) {
         printf("sem_destroy: semaforo nao existe\n");
         return -1;
     }
-    current_task->user_task = 0;
     if (s->queue != NULL) {
         aux = s->queue;
         do {
@@ -86,8 +89,10 @@ int sem_destroy (semaphore_t *s)
             aux = aux_next;
         } while (aux != s->queue && s->queue != NULL);
     }
-    s = NULL;
-
+    s->active = 0;
+    #ifdef DEBUG
+        printf("sem_destroy: destruiu semaforo\n");
+    #endif
     current_task->user_task = 1;
 	return 0;
 }
@@ -97,16 +102,21 @@ int sem_destroy (semaphore_t *s)
 // cria uma fila para até max mensagens de size bytes cada
 int mqueue_create (mqueue_t *queue, int max, int size)
 {
-    if (!queue) {
-        printf("mqueue_create: queue nao existe\n");
+    if (!queue || max <= 0 || size <= 0) {
+        printf("mqueue_create: algum dos parametros foi invalido\n");
         return -1;
     }
-    if (max <= 0 || size <= 0) {
-        printf("mqueue_create: valores max ou size incorretos\n");
+    if (!(queue->buffer = malloc (max * size))) {
+        printf("mqueue_create: erro ao alocar buffer\n");
         return -1;
     }
+    queue->buffer_end = queue->buffer + max * size;
+    queue->head = queue->buffer;
+    queue->tail = queue->buffer;
     queue->max_msgs = max;
     queue->msg_size = size;
+    queue->msg_counter = 0;
+    queue->active = 1;
     sem_create (&queue->s_buffer, 1);
     sem_create (&queue->s_item, 0);
     sem_create (&queue->s_vaga, max);
@@ -116,30 +126,75 @@ int mqueue_create (mqueue_t *queue, int max, int size)
 // envia uma mensagem para a fila
 int mqueue_send (mqueue_t *queue, void *msg)
 {
-    if (queue && msg) {
-        sem_down(&queue->s_vaga);
-        sem_down(&queue->s_buffer);
-        
-
-        sem_up(&queue->s_buffer);
-        sem_up(&s_item);
+    if (!queue || !msg) {
+        printf("mqueue_send: erro nos parametros\n");
+        return -1;
     }
+    if (queue->active == 0) {
+        return -1;
+    }
+    sem_down(&queue->s_vaga);
+    sem_down(&queue->s_buffer);
+
+    memcpy(queue->head, msg, queue->msg_size);
+    queue->head = (char*) queue->head + queue->msg_size;
+    if (queue->head == queue->buffer_end)
+        queue->head = queue->buffer;
+    queue->msg_counter++;
+
+    sem_up(&queue->s_buffer);
+    sem_up(&queue->s_item);
+    return 0;
 }
 
 // recebe uma mensagem da fila
 int mqueue_recv (mqueue_t *queue, void *msg)
 {
+    if (!queue || !msg) {
+        printf("mqueue_recv: erro nos parametros\n");
+        return -1;
+    }
+    if (queue->active == 0) {
+        return -1;
+    }
+    sem_down (&queue->s_item);
+    sem_down (&queue->s_buffer);
 
+    memcpy(msg, queue->tail, queue->msg_size);
+    queue->tail = (char*) queue->tail + queue->msg_size;
+    if(queue->tail == queue->buffer_end)
+        queue->tail = queue->buffer;
+    queue->msg_counter--;
+
+    sem_up (&queue->s_buffer);
+    sem_up (&queue->s_vaga);
+    return 0;
 }
 
 // destroi a fila, liberando as tarefas bloqueadas
 int mqueue_destroy (mqueue_t *queue)
 {
-
+    if (!queue) {
+        printf("mqueue_destroy: erro nos parametros\n");
+        return -1;
+    }
+    queue->active = 0;
+    sem_destroy(&queue->s_buffer);
+    sem_destroy(&queue->s_item);
+    sem_destroy(&queue->s_vaga);
+    #ifdef DEBUG
+        printf("mqueue_destroy: destruiu semaforos\n");
+    #endif
+    return 0;
 }
 
 // informa o número de mensagens atualmente na fila
 int mqueue_msgs (mqueue_t *queue)
 {
-
+    if (!queue)
+        return -1;
+    #ifdef DEBUG
+        printf("mqueue_msgs: num de msgs na fila: %d\n", queue->msg_counter);
+    #endif
+    return queue->msg_counter;
 }
