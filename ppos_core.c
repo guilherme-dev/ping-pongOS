@@ -33,7 +33,7 @@ void ppos_init ()
 
 	current_task = &Main_task;
 	// task_counter = 0;
-
+    user_tasks = 1;
 	//inicializa dispatcher
 	task_create(&Dispatcher, dispatcher_body, " ");
     #ifdef DEBUG
@@ -124,6 +124,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 		printf("task_create: criou tarefa %s\n", (char *)arg);
 	#endif
 	if (task->user_task) {
+        user_tasks++;
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);
     	#ifdef DEBUG
     		printf("task_create: inseriu tarefa %d na fila de prontas\n", task->id);
@@ -261,7 +262,7 @@ void dispatcher_body ()
         printf("dispatcher: Tamanho da fila de prontas: %d\n", queue_size((queue_t *) ready_queue));
     #endif
 
-	while (queue_size((queue_t *) ready_queue) > 0 || queue_size((queue_t *) sleep_queue) > 0) {
+	while (queue_size((queue_t *) ready_queue) > 0 || queue_size((queue_t *) sleep_queue) > 0 || user_tasks > 0) {
 		next = scheduler();
 		if (next) {
 			queue_remove((queue_t **) &ready_queue, (queue_t *) next);
@@ -277,6 +278,9 @@ void dispatcher_body ()
             do {
                 if (systime() >= aux->awake) {
                     aux_next = aux->next;   //Como queue_remove retira os ponteiros de aux, preciso salva-los
+                    #ifdef DEBUG
+                        printf("dispatcher: acordou tarefa %d\n", aux->id);
+                    #endif
                     queue_append((queue_t **) &ready_queue, queue_remove((queue_t **) &sleep_queue, (queue_t *) aux));
                     aux = aux_next;
                 } else {

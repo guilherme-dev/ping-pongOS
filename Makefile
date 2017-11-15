@@ -1,5 +1,5 @@
-CFLAGS = -Wall -DDEBUG  # gerar "warnings" detalhados e infos de depuração
-objs = ppos_core.o queue.o main.o
+CFLAGS = -Wall #  gerar "warnings" detalhados e infos de depuração
+objs =  ppos_core.o ppos_ipc.o queue.o main.o
 
 # regra default
 all: main
@@ -8,9 +8,10 @@ all: main
 main: $(objs)
 
 # regras de compilacao
-main.o:      main.c
+main.o	   : main.c
 ppos_core.o: ppos_core.c ppos.h ppos_data.h
-queue.o:     queue.c queue.h
+ppos_ipc.o : ppos_ipc.c ppos.h ppos_data.h
+queue.o    : queue.c queue.h
 
 # remove arquivos temporarios
 clean:
