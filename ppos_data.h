@@ -9,6 +9,7 @@
 
 #include <signal.h>
 #include <sys/time.h>
+#include <string.h>
 #include <ucontext.h>		// biblioteca POSIX de trocas de contexto
 #include "queue.h"		// biblioteca de filas genéricas
 
@@ -61,6 +62,7 @@ struct itimerval timer;
 typedef struct
 {
   int counter;
+  int active;
   task_t *queue;
 } semaphore_t ;
 
@@ -76,22 +78,21 @@ typedef struct
   // preencher quando necessário
 } barrier_t ;
 
-typedef struct
-{
-    struct buffer_t *prev ;
-    struct buffer_t *next ;
-    void * data;
-} item_t ;
 
 // estrutura que define uma fila de mensagens
 typedef struct
 {
-    item_t *buffer ;
+    void *buffer ;
+    void *buffer_end;
+    void *head;
+    void *tail;
+    int max_msgs ;
+    int msg_size ;
+    int msg_counter ;
+    int active;
     semaphore_t s_buffer ;
     semaphore_t s_item ;
     semaphore_t s_vaga ;
-    int max_msgs ;
-    int msg_size ;
 } mqueue_t ;
 
 #endif
