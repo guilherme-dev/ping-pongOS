@@ -119,10 +119,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     task->exec_time = task->cpu_time_sum = task->cpu_time = systime();
     task->activations = 0;
 
-	#ifdef DEBUG
-        printf("Tamanho da fila: %d em %d\n", queue_size((queue_t *) ready_queue), systime());
-		printf("task_create: criou tarefa %s\n", (char *)arg);
-	#endif
+	
 	if (task->user_task) {
         user_tasks++;
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);

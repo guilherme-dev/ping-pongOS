@@ -12,7 +12,7 @@
 // O conteúdo do disco simulado é armazenado em um arquivo no sistema operacional
 // subjacente.
 //
-// Atencao: deve ser usado o flag de ligacao -lrt, para ligar com a 
+// Atencao: deve ser usado o flag de ligacao -lrt, para ligar com a
 // biblioteca POSIX de tempo real, pois o disco simulado usa timers POSIX.
 
 // operating system check
