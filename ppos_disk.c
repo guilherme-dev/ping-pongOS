@@ -3,6 +3,7 @@
 // interface do gerente de disco rígido (block device driver)
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include "ppos_disk.h"
 #include "ppos.h"
 
@@ -36,11 +37,13 @@ int disk_mgr_init (int *numBlocks, int *blockSize)
     	printf("disk_mgr_init: criou tarefa disk manager\n");
     #endif
 
+    user_tasks--;
+
     printf("disk delay %d\n", disk_cmd (DISK_CMD_DELAYMAX, 0, 0));
     //nao tem dependencia, assim nao eh removido da fila de suspensas pela task_exit()
     Disk_task.dependency = -1;
     // Disk_mgr.disk_suspended = 1;
-    // queue_append((queue_t **) &suspended_queue, queue_remove((queue_t **)&ready_queue, (queue_t *) &Disk_task));
+    // queue_append((queue_t **) &Disk_mgr.suspended_queue, queue_remove((queue_t **)&ready_queue, (queue_t *) &Disk_task));
 
     sem_create(&Disk_mgr.s_disk, 1);
 
@@ -71,7 +74,7 @@ disk_requests_t *disk_request_create(task_t *task, int req_type, int block, void
         printf("disk_request_create: erro ao alocar memoria para requisicao\n");
         exit(-1);
     }
-
+    disk_request->prev  = disk_request->next = NULL;
     disk_request->task = task;
     disk_request->req_type = req_type;
     disk_request->block = block;
@@ -82,6 +85,7 @@ disk_requests_t *disk_request_create(task_t *task, int req_type, int block, void
 
 void disk_request_destroy (disk_requests_t * disk_request)
 {
+    disk_request->prev = disk_request->next = NULL;
     free(disk_request);
 }
 
@@ -95,10 +99,11 @@ int disk_block_read (int block, void *buffer)
     // inclui o pedido na fila_disco
     d_req = disk_request_create(current_task, DISK_CMD_READ, block, buffer);
     queue_append((queue_t **) &Disk_mgr.disk_queue, (queue_t *) d_req);
+
     if (Disk_mgr.disk_suspended)
     {
         // acorda o gerente de disco (põe ele na fila de prontas)
-        queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) &Disk_task));
+        queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&Disk_mgr.suspended_queue, (queue_t *) &Disk_task));
         Disk_mgr.disk_suspended = 0;
         #ifdef DEBUG
             printf("disk_block_read: colocou gerente de disco na fila de prontas\n");
@@ -110,7 +115,7 @@ int disk_block_read (int block, void *buffer)
 
     // suspende a tarefa corrente (retorna ao dispatcher)
     current_task->dependency = -1;
-    queue_append((queue_t **) &suspended_queue, (queue_t*) current_task);
+    queue_append((queue_t **) &Disk_mgr.suspended_queue, (queue_t*) current_task);
     task_switch(&Dispatcher);
 
     return 0;
@@ -132,7 +137,7 @@ int disk_block_write (int block, void *buffer)
     {
         // acorda o gerente de disco (põe ele na fila de prontas)
         aux = &Disk_task;
-        queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
+        queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&Disk_mgr.suspended_queue, (queue_t *) aux));
         Disk_mgr.disk_suspended = 0;
         #ifdef DEBUG
             printf("disk_block_read: colocou gerente de disco na fila de prontas\n");
@@ -144,7 +149,7 @@ int disk_block_write (int block, void *buffer)
 
     // suspende a tarefa corrente (retorna ao dispatcher)
     current_task->dependency = -1;
-    queue_append((queue_t **) &suspended_queue, (queue_t*) current_task);
+    queue_append((queue_t **) &Disk_mgr.suspended_queue, (queue_t*) current_task);
     task_switch(&Dispatcher);
 
     return 0;
@@ -160,15 +165,14 @@ void diskDriverBody ()
         // obtém o semáforo de acesso ao disco
         sem_down(&Disk_mgr.s_disk);
         // se foi acordado devido a um sinal do disco
-        if (Disk_mgr.sig_recv == 1)
+        if (Disk_mgr.sig_recv > 0)
         {
             // acorda a tarefa cujo pedido foi atendido
-            printf("Disk_mgr.sig_recv> %d\n", Disk_mgr.sig_recv);
-            aux = suspended_queue;
-            queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) aux));
+            aux = Disk_mgr.suspended_queue;
+            queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&Disk_mgr.suspended_queue, (queue_t *) aux));
             queue_remove((queue_t **)&Disk_mgr.disk_queue, (queue_t *) d_req);
-            free(d_req);
-            Disk_mgr.sig_recv = 0;
+            disk_request_destroy(d_req);
+            Disk_mgr.sig_recv -= 1;
 
         }
         // se o disco estiver livre e houver pedidos de E/S na fila
@@ -186,7 +190,8 @@ void diskDriverBody ()
         sem_up(&Disk_mgr.s_disk);
 
         // suspende a tarefa corrente (retorna ao dispatcher)
-        queue_append((queue_t **) &suspended_queue, (queue_t*) current_task);
+        queue_append((queue_t **) &Disk_mgr.suspended_queue, (queue_t*) current_task);
+        Disk_mgr.disk_suspended = 1;
         task_switch(&Dispatcher);
    }
 }
@@ -194,8 +199,7 @@ void diskDriverBody ()
 //tratador de sinais do disco
 void sigdisk_handler (int signum)
 {
-    Disk_mgr.sig_recv = 1;
-    printf("Received signal\n");
-    queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&suspended_queue, (queue_t *) &Disk_task));
+    Disk_mgr.sig_recv += 1;
+    queue_append((queue_t **)&ready_queue, queue_remove((queue_t **)&Disk_mgr.suspended_queue, (queue_t *) &Disk_task));
     Disk_mgr.disk_suspended = 0;
 }

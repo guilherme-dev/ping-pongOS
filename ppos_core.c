@@ -119,7 +119,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
     task->exec_time = task->cpu_time_sum = task->cpu_time = systime();
     task->activations = 0;
 
-	
+
 	if (task->user_task) {
         user_tasks++;
 		queue_append((queue_t **) &ready_queue, (queue_t *) task);
@@ -297,12 +297,15 @@ task_t * scheduler ()
 {
     task_t *high_prio, *aux, *first;		//variaveis de controle
     aux = first = high_prio = ready_queue;
-    if (queue_size((queue_t *) ready_queue) < 1)
+    if (queue_size((queue_t *) ready_queue) < 1) {
         return NULL;
-
+    }
 
 	do {
 		//Se prioridade dinamico menor, troca e diminui o alfa
+        if (!aux) {
+            return NULL;
+        }
 		if (aux->dinamic_prio < high_prio->dinamic_prio) {
 			high_prio = aux;
         } else if (aux->dinamic_prio == high_prio->dinamic_prio) {
@@ -314,7 +317,7 @@ task_t * scheduler ()
 		#endif
         aux->dinamic_prio--;
 		aux = aux->next;
-	} while (aux != first);
+	} while (aux != first && ready_queue != NULL);
 
 	#ifdef DEBUG2
 		printf("scheduler: prioridade mais alta:%d\n", high_prio->dinamic_prio);

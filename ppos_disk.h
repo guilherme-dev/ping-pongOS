@@ -26,6 +26,7 @@ typedef struct
 {
   semaphore_t s_disk;
   disk_requests_t *disk_queue;	//fila do disco
+  task_t * suspended_queue;
   int sig_recv;
   int disk_suspended;
 } disk_t ;
