@@ -49,7 +49,7 @@ int task_create (task_t *task, void (*start_func)(void *), void *arg)
 	task_counter++;
 	task->id = task_counter;
 	#ifdef DEBUG
-		printf("task_create: gerou contexto para task %d\n", task->id);
+		printf("task_create: criou tarefa %d\n", task->id);
 	#endif
 	return task->id;
 }
